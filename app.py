@@ -1,6 +1,7 @@
 import csv
 import io
 import sqlite3
+import hashlib
 from flask import Flask, jsonify, request
 from database import get_connection
 
@@ -17,16 +18,38 @@ def import_csv():
     # Check if user choose empty file
     if file.filename == "":
         return jsonify({"error": "No files have been selected for upload yet"}), 400
-
-    # Read file CSV from memory (no need to save to the hard drive)
+    
     try:
-        stream = io.StringIO(file.stream.read().decode("utf-8"), newline=None)
+        file_content = file.stream.read()
+
+        file_checksum = hashlib.sha256(file_content).hexdigest()
+
+        stream = io.StringIO(
+            file_content.decode("utf-8"),
+            newline = None
+        )
         csv_reader = csv.DictReader(stream)
+
+        print("File checksum:", file_checksum)
+
     except Exception as e:
         return jsonify({"error": f"Can not read CSV file: {str(e)}"}), 400
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT id FROM imported_files WHERE checksum = ?",
+        (file_checksum,)
+    )
+
+    if cursor.fetchone() is not None:
+        conn.close()
+
+        return jsonify({
+            "error": "This file has already been imported",
+            "checksum": file_checksum
+        }), 409
 
     # Initialize counter variables to statistically analyze the results
     total_rows = 0
@@ -84,6 +107,12 @@ def import_csv():
             imported_count += 1
         except sqlite3.IntegrityError as e:
             duplicate_rows.append({"row": row_idx, "data": row, "reason": str(e)})
+
+    # Save the imported file checksum
+    cursor.execute(
+        "INSERT INTO imported_files (filename, checksum) VALUES (?, ?)",
+        (file.filename, file_checksum)
+    )
 
     # Save all the changes to DB and close connection
     conn.commit()

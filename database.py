@@ -22,6 +22,15 @@ def init_db():
     );
 """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS imported_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            checksum TEXT UNIQUE NOT NULL,
+            imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     conn.commit();
     conn.close();
 
