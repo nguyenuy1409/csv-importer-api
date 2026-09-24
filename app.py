@@ -105,8 +105,31 @@ def import_csv():
             )
             seen_emails_in_file.add(email)
             imported_count += 1
+
         except sqlite3.IntegrityError as e:
-            duplicate_rows.append({"row": row_idx, "data": row, "reason": str(e)})
+            duplicate_rows.append({
+                "row": row_idx,
+                "data": row,
+                "reason": str(e)
+            })
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            conn.close()
+
+            return jsonify({
+                "error": "Database error while importing user",
+                "detail": str(e)
+            }), 500
+        
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+
+            return jsonify({
+                "error": "Unexpected error while importing user",
+                "detail": str(e)
+            }), 500
 
     # Save the imported file checksum
     cursor.execute(
