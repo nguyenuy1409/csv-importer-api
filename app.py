@@ -156,11 +156,35 @@ def import_csv():
 
 @app.route("/display", methods=["GET"])
 def display_data():
+    page = request.args.get("page", default=1, type=int)
+    limit = request.args.get("limit", default=10, type=int)
+
+    if page < 1:
+        return jsonify({
+            "error": "Page must be greater than 0"
+        }), 400
+
+    if limit < 1 or limit > 100:
+        return jsonify({
+            "error": "Limit must be between 1 and 100"
+        }), 400
+
+    offset = (page - 1) * limit
+
     conn = get_connection()
     cursor = conn.cursor()
 
+    cursor.execute("SELECT COUNT(*) AS total FROM users")
+    total_records = cursor.fetchone()["total"]
+
     # Retrieve all the record from users table
-    cursor.execute("SELECT id, name, email, age FROM users")
+    cursor.execute("""
+        SELECT id, name, email, age 
+        FROM users
+        ORDER BY id
+        LIMIT ? OFFSET ?
+        """, (limit, offset))
+    
     rows = cursor.fetchall()
     conn.close()
 
@@ -173,11 +197,18 @@ def display_data():
             "email": row["email"],
             "age": row["age"]
         })
+
+    total_pages = (total_records + limit - 1) // limit
+    
     return jsonify({
-        "total_records": len(users_list),
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total_records": total_records,
+            "total_pages": total_pages
+        },
         "data": users_list
     }), 200
-
 
 if __name__ == "__main__":
     app.run(debug=True)
